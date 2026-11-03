@@ -13,6 +13,8 @@ public:
     void Draw(IDirect3DDevice9 *device);
     // Call before IDirect3DDevice9::Reset.
     void OnLostDevice();
+    // Device references held by the overlay's texture and state block.
+    ULONG DeviceReferences() const;
 
 private:
     Overlay();

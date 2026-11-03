@@ -87,7 +87,7 @@ namespace
         CHECK(DefaultPadObjectFor(DIAXIS_ANY_4, 0x0A) == PadObject::RightY);
         CHECK(DefaultPadObjectFor(DIPOV_ANY_1, 0x16) == PadObject::Pov);
         CHECK(DefaultPadObjectFor(DIBUTTON_ANY(2), OniAction::Attack) == PadObject::X);
-        CHECK(DefaultPadObjectFor(DIBUTTON_ANY(12), OniAction::Onimusha) == PadObject::LT);
+        CHECK(DefaultPadObjectFor(DIBUTTON_ANY(12), OniAction::Onimusha) == PadObject::RS);
         CHECK(DefaultPadObjectFor(DIBUTTON_ANY(4), OniAction::Guard) == PadObject::LB);
         CHECK(DefaultPadObjectFor(DIBUTTON_ANY(5), OniAction::Stance) == PadObject::RB);
         CHECK(DefaultPadObjectFor(DIBUTTON_ANY(8), OniAction::Pause) == PadObject::Back);
@@ -129,8 +129,8 @@ namespace
         pad.SetBindings(DefaultBindings());
         pad.SetAxisRange(-100, 100);
 
-        g.wButtons = XINPUT_GAMEPAD_X;
-        g.bLeftTrigger = 255;
+        g.wButtons = XINPUT_GAMEPAD_X | XINPUT_GAMEPAD_RIGHT_THUMB;
+        g.bLeftTrigger = 255;                               // LT has no game action (cheat combos)
         g.bRightTrigger = XINPUT_GAMEPAD_TRIGGER_THRESHOLD; // not past the threshold
         pad.Update(&g, 10, events);
         CHECK(events.size() == 2);
@@ -145,8 +145,8 @@ namespace
         pad.Update(&g, 11, events);
         CHECK(events.empty());
 
-        // Release X, press RT.
-        g.wButtons = 0;
+        // Release X, keep R3, press RT.
+        g.wButtons = XINPUT_GAMEPAD_RIGHT_THUMB;
         g.bRightTrigger = 200;
         pad.Update(&g, 12, events);
         CHECK(events.size() == 2);

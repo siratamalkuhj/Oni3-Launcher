@@ -61,7 +61,16 @@ ULONG MyIDirect3DDevice9::AddRef(THIS)
 
 ULONG MyIDirect3DDevice9::Release(THIS)
 {
-    return this->original->Release();
+    ULONG count = this->original->Release();
+
+    // Each overlay resource holds a device reference. When only those are left the game is done
+    // with the device: free them so it is destroyed, and the game does not report a leak on exit.
+    ULONG overlayReferences = Overlay::Get().DeviceReferences();
+    if (overlayReferences != 0 && count == overlayReferences) {
+        Overlay::Get().OnLostDevice();
+        return 0;
+    }
+    return count;
 }
 
 /*** IDirect3DDevice9 methods ***/

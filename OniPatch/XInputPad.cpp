@@ -88,7 +88,7 @@ PadObject DefaultPadObjectFor(DWORD semantic, UINT_PTR appData)
     case OniAction::Pause: return PadObject::Back;
     case OniAction::StatusMenu: return PadObject::Start;
     case OniAction::Map: return PadObject::LS;
-    case OniAction::Onimusha: return PadObject::LT;
+    case OniAction::Onimusha: return PadObject::RS;
     case OniAction::TurnAround: return PadObject::RT;
     }
     return PadObject::None;

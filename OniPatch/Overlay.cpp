@@ -100,6 +100,11 @@ void Overlay::OnLostDevice()
     Release();
 }
 
+ULONG Overlay::DeviceReferences() const
+{
+    return (texture != nullptr ? 1 : 0) + (stateBlock != nullptr ? 1 : 0);
+}
+
 bool Overlay::Rebuild(IDirect3DDevice9 *device)
 {
     std::vector<std::wstring> lines;

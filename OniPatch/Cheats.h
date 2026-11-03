@@ -8,11 +8,13 @@
 // Addresses come from a Cheat Engine table and were checked against the executable.
 enum class Cheat : int
 {
-    Invincible,     // F1, RS + D-pad up
-    InfiniteOni,    // F2, RS + D-pad right: oni power and souls never decrease
-    InfiniteItems,  // F3, RS + D-pad down
-    OneHitKill,     // F4, RS + D-pad left
-    AlwaysIssen,    // F5, RS + Y: every melee hit is a critical (issen)
+    Invincible,     // F1, LT + D-pad up
+    InfiniteOni,    // F2, LT + D-pad right: oni power and souls never decrease
+    InfiniteItems,  // F3, LT + D-pad down
+    OneHitKill,     // F4, LT + D-pad left
+    AlwaysIssen,    // F5, LT + Y: attacks near an enemy become a real (homing) issen
+                    //     (Jacques' guns not checked yet)
+    AutoChain,      // F6, LT + B: issen chains continue without pressing attack
     Count
 };
 
@@ -27,7 +29,7 @@ public:
     void InstallCodePatches();
     // Once per frame: hotkeys and memory cheats.
     void Tick();
-    // Handles the right stick button combos and hides them from the game.
+    // Handles the LT combos and hides them from the game.
     XINPUT_GAMEPAD FilterPad(const XINPUT_GAMEPAD &pad);
 
     bool IsEnabled(Cheat cheat) const;

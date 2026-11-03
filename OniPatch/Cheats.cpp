@@ -9,8 +9,10 @@ namespace
     const DWORD PLAYER_HP = PLAYER + 0x21E8;       // 0x033FBD08, dword
     const DWORD RED_SOULS = PLAYER + 0x443C;       // 0x033FDF5C, dword
     const DWORD PURPLE_SOULS = PLAYER + 0x444C;    // 0x033FDF6C, byte
-    const DWORD CRITICAL = PLAYER + 0x2238;        // 0x033FBD58, byte: 114 melee critical, 153 gun critical
-    const BYTE CRITICAL_MELEE = 114;
+
+    // Chain issen: a landed issen opens a chain window only while chains remain (0x6BA930).
+    const DWORD CHAINS_LEFT = PLAYER + 0x44DB;     // byte
+    const BYTE CHAINS_KEPT = 5;
 
     // Inventory: 13 items of 8 bytes, one count byte per character (Samanosuke, Jacques, Michelle, Heihachi).
     const DWORD ITEM_COUNTS = 0x0340D6FC;
@@ -26,13 +28,28 @@ namespace
     const BYTE DAMAGE_BYTES[] = { 0x29, 0x86, 0xE8, 0x21, 0x00, 0x00 };
     const DWORD ONI_POWER_SITE = 0x005466B2;       // add word ptr [ecx+4442],si
     const BYTE ONI_POWER_BYTES[] = { 0x66, 0x01, 0xB1, 0x42, 0x44, 0x00, 0x00 };
+    // Issen. Attacks call the issen check 0x6BB910 (ecx = character), whose target search (0x6BA5D0)
+    // skips the enemy's own timing check while bit 0x40000 of +0x22F4 is set. The game clears its
+    // flags during the update, so the bit is set at the check's entry:
+    // push ecx / push esi / mov esi,ecx / test dword ptr [esi+4444],40000.
+    const DWORD ISSEN_CHECK_SITE = 0x006BB910;
+    const BYTE ISSEN_CHECK_BYTES[] = { 0x51, 0x56, 0x8B, 0xF1, 0xF7, 0x86, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00 };
 
-    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5 };
+    // In the chain window (0x6BCBB0) the next issen starts when the attack button is down:
+    // test dword ptr [esp+8],2000 / je 6BCC8C.
+    const DWORD CHAIN_BUTTON_SITE = 0x006BCBCC;
+    const BYTE CHAIN_BUTTON_BYTES[] = { 0xF7, 0x44, 0x24, 0x08, 0x00, 0x20, 0x00, 0x00, 0x0F, 0x84, 0xB2, 0x00, 0x00, 0x00 };
+    const DWORD CHAIN_PRESSED = 0x006BCBDA;
+    const DWORD CHAIN_NOT_PRESSED = 0x006BCC8C;
+
+    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6 };
+    // Pressed while LT is held. LT has no game action, so the combos never reach the game.
     const WORD COMBO_BUTTONS[CHEAT_COUNT] = {
-        XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_RIGHT, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT, XINPUT_GAMEPAD_Y
+        XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_RIGHT, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT,
+        XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_B
     };
     const WORD COMBO_MASK = XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_RIGHT | XINPUT_GAMEPAD_DPAD_DOWN |
-        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_RIGHT_THUMB;
+        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_B;
 
     DWORD ReadValue(DWORD address, int size)
     {
@@ -87,8 +104,13 @@ namespace
 extern "C" volatile BYTE g_cheatInvincible = 0;
 extern "C" volatile BYTE g_cheatOneHitKill = 0;
 extern "C" volatile BYTE g_cheatInfiniteOni = 0;
+extern "C" volatile BYTE g_cheatAlwaysIssen = 0;
+extern "C" volatile BYTE g_cheatAutoChain = 0;
 static DWORD damageReturn = DAMAGE_SITE + sizeof(DAMAGE_BYTES);
+static DWORD issenCheckReturn = ISSEN_CHECK_SITE + sizeof(ISSEN_CHECK_BYTES);
 static DWORD oniPowerReturn = ONI_POWER_SITE + sizeof(ONI_POWER_BYTES);
+static DWORD chainPressed = CHAIN_PRESSED;
+static DWORD chainNotPressed = CHAIN_NOT_PRESSED;
 
 #ifdef _M_IX86
 // Replaces "sub [esi+21E8],eax": esi is the character being hit, eax the damage, ebp the "dead" threshold.
@@ -127,6 +149,41 @@ static __declspec(naked) void OniPowerStub()
         jmp oniPowerReturn
     }
 }
+
+// Replaces the first instructions of the issen check: for the player, force the target check
+// so any nearby enemy can be cut. The test comes last because the next instruction branches on it.
+static __declspec(naked) void IssenCheckStub()
+{
+    __asm {
+        cmp g_cheatAlwaysIssen, 0
+        je original
+        cmp ecx, 0x033F9B20             // PLAYER
+        jne original
+        or dword ptr [ecx + 0x22F4], 0x40000
+    original:
+        push ecx
+        push esi
+        mov esi, ecx
+        test dword ptr [esi + 0x4444], 0x40000
+        jmp issenCheckReturn
+    }
+}
+
+// Replaces "test dword ptr [esp+8],2000 / je 6BCC8C" in the chain window:
+// with auto chain on, the attack button counts as pressed.
+static __declspec(naked) void ChainButtonStub()
+{
+    __asm {
+        cmp g_cheatAutoChain, 0
+        jne pressed
+        test dword ptr [esp + 8], 0x2000
+        je notPressed
+    pressed:
+        jmp chainPressed
+    notPressed:
+        jmp chainNotPressed
+    }
+}
 #endif
 
 Cheats &Cheats::Get()
@@ -156,6 +213,8 @@ void Cheats::InstallCodePatches()
     TraceFunc();
     PatchJump(DAMAGE_SITE, DAMAGE_BYTES, sizeof(DAMAGE_BYTES), DamageStub);
     PatchJump(ONI_POWER_SITE, ONI_POWER_BYTES, sizeof(ONI_POWER_BYTES), OniPowerStub);
+    PatchJump(ISSEN_CHECK_SITE, ISSEN_CHECK_BYTES, sizeof(ISSEN_CHECK_BYTES), IssenCheckStub);
+    PatchJump(CHAIN_BUTTON_SITE, CHAIN_BUTTON_BYTES, sizeof(CHAIN_BUTTON_BYTES), ChainButtonStub);
 #endif
 }
 
@@ -173,6 +232,7 @@ std::wstring Cheats::Label(Cheat cheat)
     static const wchar_t INFINITE_ITEMS[] = { 0x30A2, 0x30A4, 0x30C6, 0x30E0, L' ', 0x7121, 0x9650, 0 }; // aitemu mugen
     static const wchar_t ONE_HIT_KILL[] = { 0x4E00, 0x6483, 0x5FC5, 0x6BBA, 0 };                        // ichigeki hissatsu
     static const wchar_t ALWAYS_ISSEN[] = { 0x5E38, 0x6642, 0x4E00, 0x9583, 0 };                        // joji issen
+    static const wchar_t AUTO_CHAIN[] = { 0x81EA, 0x52D5, 0x9023, 0x9396, 0 };                          // jido rensa
 
     switch (cheat) {
     case Cheat::Invincible: return std::wstring(L"[F1] ") + INVINCIBLE;
@@ -180,6 +240,7 @@ std::wstring Cheats::Label(Cheat cheat)
     case Cheat::InfiniteItems: return std::wstring(L"[F3] ") + INFINITE_ITEMS;
     case Cheat::OneHitKill: return std::wstring(L"[F4] ") + ONE_HIT_KILL;
     case Cheat::AlwaysIssen: return std::wstring(L"[F5] ") + ALWAYS_ISSEN;
+    case Cheat::AutoChain: return std::wstring(L"[F6] ") + AUTO_CHAIN;
     default: return L"";
     }
 }
@@ -200,6 +261,8 @@ void Cheats::Toggle(Cheat cheat)
     g_cheatInvincible = IsEnabled(Cheat::Invincible) ? 1 : 0;
     g_cheatOneHitKill = IsEnabled(Cheat::OneHitKill) ? 1 : 0;
     g_cheatInfiniteOni = IsEnabled(Cheat::InfiniteOni) ? 1 : 0;
+    g_cheatAlwaysIssen = IsEnabled(Cheat::AlwaysIssen) ? 1 : 0;
+    g_cheatAutoChain = IsEnabled(Cheat::AutoChain) ? 1 : 0;
 
     std::cout << "Cheat " << i << (enabled[i] ? " on" : " off") << std::endl;
 }
@@ -220,7 +283,7 @@ XINPUT_GAMEPAD Cheats::FilterPad(const XINPUT_GAMEPAD &pad)
 {
     XINPUT_GAMEPAD filtered = pad;
 
-    if (pad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) {
+    if (pad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         WORD pressed = pad.wButtons & ~lastPadButtons;
         for (int i = 0; i < CHEAT_COUNT; i++)
             if (pressed & COMBO_BUTTONS[i])
@@ -267,6 +330,6 @@ void Cheats::Tick()
         KeepFromDecreasing(soulWatches, 2);
     if (IsEnabled(Cheat::InfiniteItems))
         KeepFromDecreasing(itemWatches, 2);
-    if (IsEnabled(Cheat::AlwaysIssen))
-        WriteValue(CRITICAL, 1, CRITICAL_MELEE);
+    if (IsEnabled(Cheat::AutoChain) && ReadValue(CHAINS_LEFT, 1) < CHAINS_KEPT)
+        WriteValue(CHAINS_LEFT, 1, CHAINS_KEPT);
 }
