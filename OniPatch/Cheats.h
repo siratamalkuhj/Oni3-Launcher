@@ -12,8 +12,8 @@ enum class Cheat : int
     InfiniteOni,    // F2, LT + D-pad right: oni power and souls never decrease
     InfiniteItems,  // F3, LT + D-pad down
     OneHitKill,     // F4, LT + D-pad left
-    AlwaysIssen,    // F5, LT + Y: attacks near an enemy become a real (homing) issen
-                    //     (Jacques' guns not checked yet)
+    AlwaysIssen,    // F5, LT + Y: attacks near an enemy become a real (homing) issen,
+                    //     gun shots become gun criticals
     AutoChain,      // F6, LT + B: issen chains continue without pressing attack
     Count
 };

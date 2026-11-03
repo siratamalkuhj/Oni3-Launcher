@@ -35,6 +35,12 @@ namespace
     const DWORD ISSEN_CHECK_SITE = 0x006BB910;
     const BYTE ISSEN_CHECK_BYTES[] = { 0x51, 0x56, 0x8B, 0xF1, 0xF7, 0x86, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00 };
 
+    // Guns. With a gun the issen check bails out early (bit 0x40000 of +0x4444), and even when it
+    // passes, the shot overrides the queued issen action. Instead the shot's action number is
+    // replaced: mov byte ptr [esi+2238],97 (normal shot) becomes 0x99 (gun critical).
+    const DWORD GUN_SHOT_SITE = 0x006BB221;
+    const BYTE GUN_SHOT_BYTES[] = { 0xC6, 0x86, 0x38, 0x22, 0x00, 0x00, 0x97 };
+
     // In the chain window (0x6BCBB0) the next issen starts when the attack button is down:
     // test dword ptr [esp+8],2000 / je 6BCC8C.
     const DWORD CHAIN_BUTTON_SITE = 0x006BCBCC;
@@ -108,6 +114,7 @@ extern "C" volatile BYTE g_cheatAlwaysIssen = 0;
 extern "C" volatile BYTE g_cheatAutoChain = 0;
 static DWORD damageReturn = DAMAGE_SITE + sizeof(DAMAGE_BYTES);
 static DWORD issenCheckReturn = ISSEN_CHECK_SITE + sizeof(ISSEN_CHECK_BYTES);
+static DWORD gunShotReturn = GUN_SHOT_SITE + sizeof(GUN_SHOT_BYTES);
 static DWORD oniPowerReturn = ONI_POWER_SITE + sizeof(ONI_POWER_BYTES);
 static DWORD chainPressed = CHAIN_PRESSED;
 static DWORD chainNotPressed = CHAIN_NOT_PRESSED;
@@ -169,6 +176,22 @@ static __declspec(naked) void IssenCheckStub()
     }
 }
 
+// Replaces "mov byte ptr [esi+2238],97": the player's shots become gun criticals.
+static __declspec(naked) void GunShotStub()
+{
+    __asm {
+        cmp g_cheatAlwaysIssen, 0
+        je normal
+        cmp esi, 0x033F9B20             // PLAYER
+        jne normal
+        mov byte ptr [esi + 0x2238], 0x99
+        jmp gunShotReturn
+    normal:
+        mov byte ptr [esi + 0x2238], 0x97
+        jmp gunShotReturn
+    }
+}
+
 // Replaces "test dword ptr [esp+8],2000 / je 6BCC8C" in the chain window:
 // with auto chain on, the attack button counts as pressed.
 static __declspec(naked) void ChainButtonStub()
@@ -214,6 +237,7 @@ void Cheats::InstallCodePatches()
     PatchJump(DAMAGE_SITE, DAMAGE_BYTES, sizeof(DAMAGE_BYTES), DamageStub);
     PatchJump(ONI_POWER_SITE, ONI_POWER_BYTES, sizeof(ONI_POWER_BYTES), OniPowerStub);
     PatchJump(ISSEN_CHECK_SITE, ISSEN_CHECK_BYTES, sizeof(ISSEN_CHECK_BYTES), IssenCheckStub);
+    PatchJump(GUN_SHOT_SITE, GUN_SHOT_BYTES, sizeof(GUN_SHOT_BYTES), GunShotStub);
     PatchJump(CHAIN_BUTTON_SITE, CHAIN_BUTTON_BYTES, sizeof(CHAIN_BUTTON_BYTES), ChainButtonStub);
 #endif
 }
