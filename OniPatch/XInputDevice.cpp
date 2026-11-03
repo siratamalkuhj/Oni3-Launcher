@@ -122,7 +122,13 @@ void XInputDevice::ReadController()
     }
 
     // A disconnected controller reports neutral values, releasing anything held.
-    pad.Update(gamepad, now, buffer);
+    if (gamepad != nullptr) {
+        // Cheat combos (right stick button + D-pad / Y) are not passed to the game.
+        XINPUT_GAMEPAD filtered = Cheats::Get().FilterPad(*gamepad);
+        pad.Update(&filtered, now, buffer);
+    } else {
+        pad.Update(nullptr, now, buffer);
+    }
 }
 
 /*** IUnknown methods ***/

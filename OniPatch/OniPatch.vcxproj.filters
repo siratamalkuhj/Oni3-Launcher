@@ -31,6 +31,12 @@
     <ClCompile Include="XInputPad.cpp">
       <Filter>Fichiers sources\DirectX</Filter>
     </ClCompile>
+    <ClCompile Include="Cheats.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Overlay.cpp">
+      <Filter>Fichiers sources\DirectX</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MyIDirect3D9.h">
@@ -64,6 +70,12 @@
       <Filter>Fichiers d%27en-tête\DirectX</Filter>
     </ClInclude>
     <ClInclude Include="XInputPad.h">
+      <Filter>Fichiers d%27en-tête\DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="Cheats.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Overlay.h">
       <Filter>Fichiers d%27en-tête\DirectX</Filter>
     </ClInclude>
   </ItemGroup>

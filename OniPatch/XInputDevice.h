@@ -3,6 +3,7 @@
 #include "pch.h"
 #include "XInputPad.h"
 #include "Trace.h"
+#include "Cheats.h"
 
 // {4F4E4933-5849-4E50-5554-2D5041440001}
 extern const GUID GUID_OniXInputDevice;

@@ -132,11 +132,19 @@ UINT MyIDirect3DDevice9::GetNumberOfSwapChains(THIS)
 
 HRESULT MyIDirect3DDevice9::Reset(D3DPRESENT_PARAMETERS *pPresentationParameters)
 {
+    Overlay::Get().OnLostDevice();
     return this->original->Reset(pPresentationParameters);
 }
 
 HRESULT MyIDirect3DDevice9::Present(CONST RECT *pSourceRect, CONST RECT *pDestRect, HWND hDestWindowOverride, CONST RGNDATA *pDirtyRegion)
 {
+    // Once per frame: cheats, then the overlay on top of the finished frame.
+    Cheats::Get().Tick();
+    if (SUCCEEDED(this->original->BeginScene())) {
+        Overlay::Get().Draw(this->original);
+        this->original->EndScene();
+    }
+
     return this->original->Present(pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
 }
 

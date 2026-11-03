@@ -128,6 +128,8 @@ void OniHook::Hook()
     if (DetourTransactionCommit() != NO_ERROR) {
         std::cerr << "Detour failed";
     }
+
+    Cheats::Get().InstallCodePatches();
 }
 
 void OniHook::UnHook()

@@ -5,6 +5,7 @@
 #include "Trace.h"
 #include "MyIDirect3D9.h"
 #include "MyIDirectInput8.h"
+#include "Cheats.h"
 
 // Type
 typedef HWND(WINAPI *CreateWindowExWType) (

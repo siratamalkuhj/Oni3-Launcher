@@ -1,6 +1,8 @@
 #pragma once
 
 #include "pch.h"
+#include "Cheats.h"
+#include "Overlay.h"
 
 class MyIDirect3DDevice9 : public IDirect3DDevice9
 {
