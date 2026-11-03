@@ -41,6 +41,13 @@ namespace
     const DWORD GUN_SHOT_SITE = 0x006BB221;
     const BYTE GUN_SHOT_BYTES[] = { 0xC6, 0x86, 0x38, 0x22, 0x00, 0x00, 0x97 };
 
+    // Movement. Every character's position is updated as old position + rotated animation
+    // movement: movaps xmm1,xmm0 / addps xmm1,[esp+30], then stored to [eax] (or [edx] on the
+    // second path), which points to the character's position (+0x90). Z is the height.
+    const DWORD MOVE_SITE = 0x0053F5A7;
+    const DWORD MOVE_SLOPE_SITE = 0x0053F602;
+    const BYTE MOVE_BYTES[] = { 0x0F, 0x28, 0xC8, 0x0F, 0x58, 0x4C, 0x24, 0x30 };
+
     // In the chain window (0x6BCBB0) the next issen starts when the attack button is down:
     // test dword ptr [esp+8],2000 / je 6BCC8C.
     const DWORD CHAIN_BUTTON_SITE = 0x006BCBCC;
@@ -48,14 +55,14 @@ namespace
     const DWORD CHAIN_PRESSED = 0x006BCBDA;
     const DWORD CHAIN_NOT_PRESSED = 0x006BCC8C;
 
-    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6 };
+    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7 };
     // Pressed while LT is held. LT has no game action, so the combos never reach the game.
     const WORD COMBO_BUTTONS[CHEAT_COUNT] = {
         XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_RIGHT, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT,
-        XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_B
+        XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X
     };
     const WORD COMBO_MASK = XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_RIGHT | XINPUT_GAMEPAD_DPAD_DOWN |
-        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_B;
+        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_B | XINPUT_GAMEPAD_X;
 
     DWORD ReadValue(DWORD address, int size)
     {
@@ -112,6 +119,11 @@ extern "C" volatile BYTE g_cheatOneHitKill = 0;
 extern "C" volatile BYTE g_cheatInfiniteOni = 0;
 extern "C" volatile BYTE g_cheatAlwaysIssen = 0;
 extern "C" volatile BYTE g_cheatAutoChain = 0;
+extern "C" volatile BYTE g_cheatMoveSpeed = 0;
+// x, y scaled; z (height) and w kept. Aligned for mulps.
+__declspec(align(16)) static float moveFactor[4] = { 2.0f, 2.0f, 1.0f, 1.0f };
+static DWORD moveReturn = MOVE_SITE + sizeof(MOVE_BYTES);
+static DWORD moveSlopeReturn = MOVE_SLOPE_SITE + sizeof(MOVE_BYTES);
 static DWORD damageReturn = DAMAGE_SITE + sizeof(DAMAGE_BYTES);
 static DWORD issenCheckReturn = ISSEN_CHECK_SITE + sizeof(ISSEN_CHECK_BYTES);
 static DWORD gunShotReturn = GUN_SHOT_SITE + sizeof(GUN_SHOT_BYTES);
@@ -192,6 +204,40 @@ static __declspec(naked) void GunShotStub()
     }
 }
 
+// Replaces "movaps xmm1,xmm0 / addps xmm1,[esp+30]" before the position store at [eax]:
+// scale the player's movement. The next instruction branches on "test edi,edi", redone last.
+static __declspec(naked) void MoveStub()
+{
+    __asm {
+        movaps xmm1, xmm0
+        cmp g_cheatMoveSpeed, 0
+        je addMove
+        cmp eax, 0x033F9BB0             // PLAYER + 0x90 (position)
+        jne addMove
+        mulps xmm1, moveFactor
+    addMove:
+        addps xmm1, [esp + 0x30]
+        test edi, edi
+        jmp moveReturn
+    }
+}
+
+// Same on the second path, where the position pointer is in edx.
+static __declspec(naked) void MoveSlopeStub()
+{
+    __asm {
+        movaps xmm1, xmm0
+        cmp g_cheatMoveSpeed, 0
+        je addMove
+        cmp edx, 0x033F9BB0             // PLAYER + 0x90 (position)
+        jne addMove
+        mulps xmm1, moveFactor
+    addMove:
+        addps xmm1, [esp + 0x30]
+        jmp moveSlopeReturn
+    }
+}
+
 // Replaces "test dword ptr [esp+8],2000 / je 6BCC8C" in the chain window:
 // with auto chain on, the attack button counts as pressed.
 static __declspec(naked) void ChainButtonStub()
@@ -238,6 +284,8 @@ void Cheats::InstallCodePatches()
     PatchJump(ONI_POWER_SITE, ONI_POWER_BYTES, sizeof(ONI_POWER_BYTES), OniPowerStub);
     PatchJump(ISSEN_CHECK_SITE, ISSEN_CHECK_BYTES, sizeof(ISSEN_CHECK_BYTES), IssenCheckStub);
     PatchJump(GUN_SHOT_SITE, GUN_SHOT_BYTES, sizeof(GUN_SHOT_BYTES), GunShotStub);
+    PatchJump(MOVE_SITE, MOVE_BYTES, sizeof(MOVE_BYTES), MoveStub);
+    PatchJump(MOVE_SLOPE_SITE, MOVE_BYTES, sizeof(MOVE_BYTES), MoveSlopeStub);
     PatchJump(CHAIN_BUTTON_SITE, CHAIN_BUTTON_BYTES, sizeof(CHAIN_BUTTON_BYTES), ChainButtonStub);
 #endif
 }
@@ -257,6 +305,7 @@ std::wstring Cheats::Label(Cheat cheat)
     static const wchar_t ONE_HIT_KILL[] = { 0x4E00, 0x6483, 0x5FC5, 0x6BBA, 0 };                        // ichigeki hissatsu
     static const wchar_t ALWAYS_ISSEN[] = { 0x5E38, 0x6642, 0x4E00, 0x9583, 0 };                        // joji issen
     static const wchar_t AUTO_CHAIN[] = { 0x81EA, 0x52D5, 0x9023, 0x9396, 0 };                          // jido rensa
+    static const wchar_t MOVE_SPEED[] = { 0x79FB, 0x52D5, 0x901F, 0x5EA6, L' ', 0x00D7, L'2', 0 };     // ido sokudo x2
 
     switch (cheat) {
     case Cheat::Invincible: return std::wstring(L"[F1] ") + INVINCIBLE;
@@ -265,6 +314,7 @@ std::wstring Cheats::Label(Cheat cheat)
     case Cheat::OneHitKill: return std::wstring(L"[F4] ") + ONE_HIT_KILL;
     case Cheat::AlwaysIssen: return std::wstring(L"[F5] ") + ALWAYS_ISSEN;
     case Cheat::AutoChain: return std::wstring(L"[F6] ") + AUTO_CHAIN;
+    case Cheat::MoveSpeed: return std::wstring(L"[F7] ") + MOVE_SPEED;
     default: return L"";
     }
 }
@@ -287,6 +337,7 @@ void Cheats::Toggle(Cheat cheat)
     g_cheatInfiniteOni = IsEnabled(Cheat::InfiniteOni) ? 1 : 0;
     g_cheatAlwaysIssen = IsEnabled(Cheat::AlwaysIssen) ? 1 : 0;
     g_cheatAutoChain = IsEnabled(Cheat::AutoChain) ? 1 : 0;
+    g_cheatMoveSpeed = IsEnabled(Cheat::MoveSpeed) ? 1 : 0;
 
     std::cout << "Cheat " << i << (enabled[i] ? " on" : " off") << std::endl;
 }

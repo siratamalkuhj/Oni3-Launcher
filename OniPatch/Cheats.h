@@ -15,6 +15,7 @@ enum class Cheat : int
     AlwaysIssen,    // F5, LT + Y: attacks near an enemy become a real (homing) issen,
                     //     gun shots become gun criticals
     AutoChain,      // F6, LT + B: issen chains continue without pressing attack
+    MoveSpeed,      // F7, LT + X: the player moves twice as fast (horizontally)
     Count
 };
 
