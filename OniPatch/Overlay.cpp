@@ -110,7 +110,7 @@ bool Overlay::Rebuild(IDirect3DDevice9 *device)
     std::vector<std::wstring> lines;
     for (int i = 0; i < CHEAT_COUNT; i++)
         if (Cheats::Get().IsEnabled(static_cast<Cheat>(i)))
-            lines.push_back(Cheats::Label(static_cast<Cheat>(i)));
+            lines.push_back(Cheats::Get().Label(static_cast<Cheat>(i)));
 
     if (texture != nullptr) {
         texture->Release();

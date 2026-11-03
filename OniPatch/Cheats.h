@@ -15,7 +15,7 @@ enum class Cheat : int
     AlwaysIssen,    // F5, LT + Y: attacks near an enemy become a real (homing) issen,
                     //     gun shots become gun criticals
     AutoChain,      // F6, LT + B: issen chains continue without pressing attack
-    MoveSpeed,      // F7, LT + X: the player moves twice as fast (horizontally)
+    MoveSpeed,      // F7, LT + X: cycles off / x2 / x3 / x4 horizontal player movement
     Count
 };
 
@@ -35,7 +35,7 @@ public:
 
     bool IsEnabled(Cheat cheat) const;
     // Label of an enabled cheat for the overlay, e.g. "[F1] Invincible" in Japanese.
-    static std::wstring Label(Cheat cheat);
+    std::wstring Label(Cheat cheat) const;
     // Changes each time a cheat is toggled, so the overlay knows when to redraw.
     DWORD Version() const { return version; }
 
@@ -56,6 +56,7 @@ private:
     bool enabled[CHEAT_COUNT];
     bool keyDown[CHEAT_COUNT];
     WORD lastPadButtons;
+    int moveMultiplier;  // 1 when the move speed cheat is off
     DWORD version;
     std::vector<Watch> soulWatches;
     std::vector<Watch> itemWatches;

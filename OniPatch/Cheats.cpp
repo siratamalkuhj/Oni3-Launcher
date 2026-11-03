@@ -47,6 +47,7 @@ namespace
     const DWORD MOVE_SITE = 0x0053F5A7;
     const DWORD MOVE_SLOPE_SITE = 0x0053F602;
     const BYTE MOVE_BYTES[] = { 0x0F, 0x28, 0xC8, 0x0F, 0x58, 0x4C, 0x24, 0x30 };
+    const int MOVE_MULTIPLIER_MAX = 4;
 
     // In the chain window (0x6BCBB0) the next issen starts when the attack button is down:
     // test dword ptr [esp+8],2000 / je 6BCC8C.
@@ -120,8 +121,8 @@ extern "C" volatile BYTE g_cheatInfiniteOni = 0;
 extern "C" volatile BYTE g_cheatAlwaysIssen = 0;
 extern "C" volatile BYTE g_cheatAutoChain = 0;
 extern "C" volatile BYTE g_cheatMoveSpeed = 0;
-// x, y scaled; z (height) and w kept. Aligned for mulps.
-__declspec(align(16)) static float moveFactor[4] = { 2.0f, 2.0f, 1.0f, 1.0f };
+// x, y scaled by the current multiplier; z (height) and w kept. Aligned for mulps.
+__declspec(align(16)) static float moveFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 static DWORD moveReturn = MOVE_SITE + sizeof(MOVE_BYTES);
 static DWORD moveSlopeReturn = MOVE_SLOPE_SITE + sizeof(MOVE_BYTES);
 static DWORD damageReturn = DAMAGE_SITE + sizeof(DAMAGE_BYTES);
@@ -262,7 +263,7 @@ Cheats &Cheats::Get()
 }
 
 Cheats::Cheats()
-    : enabled(), keyDown(), lastPadButtons(0), version(0)
+    : enabled(), keyDown(), lastPadButtons(0), moveMultiplier(1), version(0)
 {
     soulWatches.push_back({ RED_SOULS, 4, 0, false });
     soulWatches.push_back({ PURPLE_SOULS, 1, 0, false });
@@ -295,7 +296,7 @@ bool Cheats::IsEnabled(Cheat cheat) const
     return enabled[static_cast<int>(cheat)];
 }
 
-std::wstring Cheats::Label(Cheat cheat)
+std::wstring Cheats::Label(Cheat cheat) const
 {
     // Japanese labels as code points: the sources are compiled with the Shift-JIS code page,
     // where \u escapes in literals are not reliable.
@@ -305,7 +306,7 @@ std::wstring Cheats::Label(Cheat cheat)
     static const wchar_t ONE_HIT_KILL[] = { 0x4E00, 0x6483, 0x5FC5, 0x6BBA, 0 };                        // ichigeki hissatsu
     static const wchar_t ALWAYS_ISSEN[] = { 0x5E38, 0x6642, 0x4E00, 0x9583, 0 };                        // joji issen
     static const wchar_t AUTO_CHAIN[] = { 0x81EA, 0x52D5, 0x9023, 0x9396, 0 };                          // jido rensa
-    static const wchar_t MOVE_SPEED[] = { 0x79FB, 0x52D5, 0x901F, 0x5EA6, L' ', 0x00D7, L'2', 0 };     // ido sokudo x2
+    static const wchar_t MOVE_SPEED[] = { 0x79FB, 0x52D5, 0x901F, 0x5EA6, L' ', 0x00D7, 0 };           // ido sokudo x
 
     switch (cheat) {
     case Cheat::Invincible: return std::wstring(L"[F1] ") + INVINCIBLE;
@@ -314,7 +315,7 @@ std::wstring Cheats::Label(Cheat cheat)
     case Cheat::OneHitKill: return std::wstring(L"[F4] ") + ONE_HIT_KILL;
     case Cheat::AlwaysIssen: return std::wstring(L"[F5] ") + ALWAYS_ISSEN;
     case Cheat::AutoChain: return std::wstring(L"[F6] ") + AUTO_CHAIN;
-    case Cheat::MoveSpeed: return std::wstring(L"[F7] ") + MOVE_SPEED;
+    case Cheat::MoveSpeed: return std::wstring(L"[F7] ") + MOVE_SPEED + std::to_wstring(moveMultiplier);
     default: return L"";
     }
 }
@@ -323,7 +324,14 @@ void Cheats::Toggle(Cheat cheat)
 {
     int i = static_cast<int>(cheat);
 
-    enabled[i] = !enabled[i];
+    if (cheat == Cheat::MoveSpeed) {
+        // off -> x2 -> x3 -> x4 -> off
+        moveMultiplier = moveMultiplier >= MOVE_MULTIPLIER_MAX ? 1 : moveMultiplier + 1;
+        moveFactor[0] = moveFactor[1] = static_cast<float>(moveMultiplier);
+        enabled[i] = moveMultiplier > 1;
+    } else {
+        enabled[i] = !enabled[i];
+    }
     version++;
 
     // Start watching from the current values.
