@@ -22,6 +22,15 @@
     <ClCompile Include="Trace.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="MyIDirectInput8.cpp">
+      <Filter>Fichiers sources\DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="XInputDevice.cpp">
+      <Filter>Fichiers sources\DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="XInputPad.cpp">
+      <Filter>Fichiers sources\DirectX</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MyIDirect3D9.h">
@@ -47,6 +56,15 @@
     </ClInclude>
     <ClInclude Include="dllmain.h">
       <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="MyIDirectInput8.h">
+      <Filter>Fichiers d%27en-tête\DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="XInputDevice.h">
+      <Filter>Fichiers d%27en-tête\DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="XInputPad.h">
+      <Filter>Fichiers d%27en-tête\DirectX</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

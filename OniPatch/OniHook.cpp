@@ -3,6 +3,7 @@
 
 CreateWindowExWType OniHook::TrueCreateWindowExW = nullptr;
 Direct3DCreate9Type OniHook::TrueDirect3DCreate9 = nullptr;
+DirectInput8CreateType OniHook::TrueDirectInput8Create = nullptr;
 OniHook *OniHook::instance = nullptr;
 
 HWND WINAPI OniHook::MyCreateWindowExW(
@@ -79,12 +80,27 @@ IDirect3D9 *WINAPI OniHook::MyDirect3DCreate9(UINT SDKVersion)
     return new MyIDirect3D9(d3d9);
 }
 
+HRESULT WINAPI OniHook::MyDirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter)
+{
+    TraceFunc();
+    HRESULT hResult = TrueDirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter);
+
+    // Onimusha 3 asks for the ANSI interface.
+    if (SUCCEEDED(hResult) && riidltf == IID_IDirectInput8A && punkOuter == nullptr) {
+        TraceMsg("IDirectInput8A wrapped");
+        *ppvOut = static_cast<IDirectInput8A *>(new MyIDirectInput8(static_cast<IDirectInput8A *>(*ppvOut)));
+    }
+
+    return hResult;
+}
+
 void OniHook::LoadEntryPoints()
 {
     TraceFunc();
 
     TrueCreateWindowExW = reinterpret_cast<CreateWindowExWType>(Utils::LoadProcAddress("user32", "CreateWindowExW"));
     TrueDirect3DCreate9 = reinterpret_cast<Direct3DCreate9Type>(Utils::LoadProcAddress("d3d9", "Direct3DCreate9"));
+    TrueDirectInput8Create = reinterpret_cast<DirectInput8CreateType>(Utils::LoadProcAddress("dinput8", "DirectInput8Create"));
 }
 
 OniHook *OniHook::GetInstance()
@@ -106,6 +122,8 @@ void OniHook::Hook()
     DetourUpdateThread(GetCurrentThread());
     DetourAttach((PVOID *)&TrueDirect3DCreate9, MyDirect3DCreate9);
     DetourAttach((PVOID *)&TrueCreateWindowExW, MyCreateWindowExW);
+    if (TrueDirectInput8Create != nullptr)
+        DetourAttach((PVOID *)&TrueDirectInput8Create, MyDirectInput8Create);
 
     if (DetourTransactionCommit() != NO_ERROR) {
         std::cerr << "Detour failed";

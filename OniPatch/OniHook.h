@@ -4,6 +4,7 @@
 #include "Utils.h"
 #include "Trace.h"
 #include "MyIDirect3D9.h"
+#include "MyIDirectInput8.h"
 
 // Type
 typedef HWND(WINAPI *CreateWindowExWType) (
@@ -22,6 +23,8 @@ typedef HWND(WINAPI *CreateWindowExWType) (
 
 typedef IDirect3D9 *(WINAPI *Direct3DCreate9Type) (UINT SDKVersion);
 
+typedef HRESULT(WINAPI *DirectInput8CreateType) (HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
+
 class OniHook
 {
 private:
@@ -29,10 +32,12 @@ private:
 public:
 	static CreateWindowExWType TrueCreateWindowExW;
 	static Direct3DCreate9Type TrueDirect3DCreate9;
+	static DirectInput8CreateType TrueDirectInput8Create;
 
 	// Hooks
 	static HWND WINAPI MyCreateWindowExW(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpClassName, _In_opt_ LPCWSTR lpWindowName, _In_ DWORD dwStyle, _In_ int X, _In_ int Y, _In_ int nWidth, _In_ int nHeight, _In_opt_ HWND hWndParent, _In_opt_ HMENU hMenu, _In_opt_ HINSTANCE hInstance, _In_opt_ LPVOID lpParam);
 	static IDirect3D9 *WINAPI MyDirect3DCreate9(UINT SDKVersion);
+	static HRESULT WINAPI MyDirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
 	void LoadEntryPoints();
 	static OniHook *GetInstance();
 	void Hook();

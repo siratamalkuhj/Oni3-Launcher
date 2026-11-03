@@ -9,3 +9,12 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <tchar.h>
+#include <deque>
+#include <vector>
+
+#define DIRECTINPUT_VERSION 0x0800
+#include <dinput.h>
+#include <Xinput.h>
+
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "Xinput.lib")
