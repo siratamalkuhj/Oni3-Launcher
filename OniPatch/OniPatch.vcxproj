@@ -161,6 +161,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Cheats.h" />
+    <ClInclude Include="CrashLog.h" />
     <ClInclude Include="dllmain.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MyIDirect3DDevice9.h" />
@@ -176,6 +177,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Cheats.cpp" />
+    <ClCompile Include="CrashLog.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="MyIDirect3D9.cpp" />
     <ClCompile Include="MyIDirect3DDevice9.cpp" />

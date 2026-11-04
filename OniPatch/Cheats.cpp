@@ -49,6 +49,12 @@ namespace
     const BYTE MOVE_BYTES[] = { 0x0F, 0x28, 0xC8, 0x0F, 0x58, 0x4C, 0x24, 0x30 };
     const int MOVE_MULTIPLIER_MAX = 4;
 
+    // Just guard. When a character is hit, 0x6C598E checks the guarding bit 0x2 of +0x22F4:
+    // mov ecx,[esi+22F4] / and ecx,2 / xor eax,eax / or eax,ecx (then je to the damage path).
+    // A guarded hit is deflected when the guard started less than +0x44D8 frames ago (+0x44D7).
+    const DWORD GUARD_CHECK_SITE = 0x006C598E;
+    const BYTE GUARD_CHECK_BYTES[] = { 0x8B, 0x8E, 0xF4, 0x22, 0x00, 0x00, 0x83, 0xE1, 0x02, 0x33, 0xC0, 0x0B, 0xC1 };
+
     // In the chain window (0x6BCBB0) the next issen starts when the attack button is down:
     // test dword ptr [esp+8],2000 / je 6BCC8C.
     const DWORD CHAIN_BUTTON_SITE = 0x006BCBCC;
@@ -56,14 +62,14 @@ namespace
     const DWORD CHAIN_PRESSED = 0x006BCBDA;
     const DWORD CHAIN_NOT_PRESSED = 0x006BCC8C;
 
-    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7 };
+    const int KEYS[CHEAT_COUNT] = { VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8 };
     // Pressed while LT is held. LT has no game action, so the combos never reach the game.
     const WORD COMBO_BUTTONS[CHEAT_COUNT] = {
         XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_RIGHT, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT,
-        XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X
+        XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_A
     };
     const WORD COMBO_MASK = XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_RIGHT | XINPUT_GAMEPAD_DPAD_DOWN |
-        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_B | XINPUT_GAMEPAD_X;
+        XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_Y | XINPUT_GAMEPAD_B | XINPUT_GAMEPAD_X | XINPUT_GAMEPAD_A;
 
     DWORD ReadValue(DWORD address, int size)
     {
@@ -95,7 +101,13 @@ namespace
     {
         DWORD oldProtect;
         BYTE *code = reinterpret_cast<BYTE *>(site);
+        MEMORY_BASIC_INFORMATION mbi;
 
+        if (VirtualQuery(code, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT ||
+            reinterpret_cast<BYTE *>(mbi.BaseAddress) + mbi.RegionSize < code + length) {
+            std::cerr << "Code at 0x" << std::hex << site << std::dec << " is not mapped, cheat not installed" << std::endl;
+            return false;
+        }
         if (memcmp(code, expected, length) != 0) {
             std::cerr << "Unexpected code at 0x" << std::hex << site << std::dec << ", cheat not installed" << std::endl;
             return false;
@@ -121,6 +133,8 @@ extern "C" volatile BYTE g_cheatInfiniteOni = 0;
 extern "C" volatile BYTE g_cheatAlwaysIssen = 0;
 extern "C" volatile BYTE g_cheatAutoChain = 0;
 extern "C" volatile BYTE g_cheatMoveSpeed = 0;
+extern "C" volatile BYTE g_cheatAutoGuard = 0;
+static DWORD guardCheckReturn = GUARD_CHECK_SITE + sizeof(GUARD_CHECK_BYTES);
 // x, y scaled by the current multiplier; z (height) and w kept. Aligned for mulps.
 __declspec(align(16)) static float moveFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 static DWORD moveReturn = MOVE_SITE + sizeof(MOVE_BYTES);
@@ -239,6 +253,34 @@ static __declspec(naked) void MoveSlopeStub()
     }
 }
 
+// Replaces the guarding test when a character is hit: the player counts as having just
+// started guarding, so the game runs its own deflect. Unguardable attacks are checked later
+// by the game and stay unguardable. The final "or" sets the flags for the je that follows.
+// Only in states where the player could guard (byte +4: 0 idle, 1-3 moving, 9 guarding);
+// during attacks and issen the hit is left to the game.
+static __declspec(naked) void GuardCheckStub()
+{
+    __asm {
+        mov ecx, [esi + 0x22F4]
+        cmp g_cheatAutoGuard, 0
+        je guardTest
+        cmp esi, 0x033F9B20             // PLAYER
+        jne guardTest
+        cmp byte ptr [esi + 4], 3
+        jbe canGuard
+        cmp byte ptr [esi + 4], 9
+        jne guardTest
+    canGuard:
+        or ecx, 2
+        mov byte ptr [esi + 0x44D7], 0
+    guardTest:
+        and ecx, 2
+        xor eax, eax
+        or eax, ecx
+        jmp guardCheckReturn
+    }
+}
+
 // Replaces "test dword ptr [esp+8],2000 / je 6BCC8C" in the chain window:
 // with auto chain on, the attack button counts as pressed.
 static __declspec(naked) void ChainButtonStub()
@@ -281,12 +323,21 @@ void Cheats::InstallCodePatches()
 {
 #ifdef _M_IX86
     TraceFunc();
+
+    // Only inside the game (the DLL is also loaded by OniPatchTests).
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    const char *exe = strrchr(path, '\\');
+    if (_stricmp(exe ? exe + 1 : path, "oni3.exe") != 0)
+        return;
+
     PatchJump(DAMAGE_SITE, DAMAGE_BYTES, sizeof(DAMAGE_BYTES), DamageStub);
     PatchJump(ONI_POWER_SITE, ONI_POWER_BYTES, sizeof(ONI_POWER_BYTES), OniPowerStub);
     PatchJump(ISSEN_CHECK_SITE, ISSEN_CHECK_BYTES, sizeof(ISSEN_CHECK_BYTES), IssenCheckStub);
     PatchJump(GUN_SHOT_SITE, GUN_SHOT_BYTES, sizeof(GUN_SHOT_BYTES), GunShotStub);
     PatchJump(MOVE_SITE, MOVE_BYTES, sizeof(MOVE_BYTES), MoveStub);
     PatchJump(MOVE_SLOPE_SITE, MOVE_BYTES, sizeof(MOVE_BYTES), MoveSlopeStub);
+    PatchJump(GUARD_CHECK_SITE, GUARD_CHECK_BYTES, sizeof(GUARD_CHECK_BYTES), GuardCheckStub);
     PatchJump(CHAIN_BUTTON_SITE, CHAIN_BUTTON_BYTES, sizeof(CHAIN_BUTTON_BYTES), ChainButtonStub);
 #endif
 }
@@ -306,7 +357,8 @@ std::wstring Cheats::Label(Cheat cheat) const
     static const wchar_t ONE_HIT_KILL[] = { 0x4E00, 0x6483, 0x5FC5, 0x6BBA, 0 };                        // ichigeki hissatsu
     static const wchar_t ALWAYS_ISSEN[] = { 0x5E38, 0x6642, 0x4E00, 0x9583, 0 };                        // joji issen
     static const wchar_t AUTO_CHAIN[] = { 0x81EA, 0x52D5, 0x9023, 0x9396, 0 };                          // jido rensa
-    static const wchar_t MOVE_SPEED[] = { 0x79FB, 0x52D5, 0x901F, 0x5EA6, L' ', 0x00D7, 0 };           // ido sokudo x
+    static const wchar_t AUTO_GUARD[] = { 0x81EA, 0x52D5, 0x5F3E, 0x304D, 0 };                          // jido hajiki
+    static const wchar_t MOVE_SPEED[] ={ 0x79FB, 0x52D5, 0x901F, 0x5EA6, L' ', 0x00D7, 0 };           // ido sokudo x
 
     switch (cheat) {
     case Cheat::Invincible: return std::wstring(L"[F1] ") + INVINCIBLE;
@@ -316,6 +368,7 @@ std::wstring Cheats::Label(Cheat cheat) const
     case Cheat::AlwaysIssen: return std::wstring(L"[F5] ") + ALWAYS_ISSEN;
     case Cheat::AutoChain: return std::wstring(L"[F6] ") + AUTO_CHAIN;
     case Cheat::MoveSpeed: return std::wstring(L"[F7] ") + MOVE_SPEED + std::to_wstring(moveMultiplier);
+    case Cheat::AutoGuard: return std::wstring(L"[F8] ") + AUTO_GUARD;
     default: return L"";
     }
 }
@@ -346,6 +399,7 @@ void Cheats::Toggle(Cheat cheat)
     g_cheatAlwaysIssen = IsEnabled(Cheat::AlwaysIssen) ? 1 : 0;
     g_cheatAutoChain = IsEnabled(Cheat::AutoChain) ? 1 : 0;
     g_cheatMoveSpeed = IsEnabled(Cheat::MoveSpeed) ? 1 : 0;
+    g_cheatAutoGuard = IsEnabled(Cheat::AutoGuard) ? 1 : 0;
 
     std::cout << "Cheat " << i << (enabled[i] ? " on" : " off") << std::endl;
 }

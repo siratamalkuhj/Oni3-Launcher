@@ -130,6 +130,7 @@ void OniHook::Hook()
     }
 
     Cheats::Get().InstallCodePatches();
+    CrashLog::Install();
 }
 
 void OniHook::UnHook()

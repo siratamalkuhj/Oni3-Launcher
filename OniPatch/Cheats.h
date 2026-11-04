@@ -16,6 +16,7 @@ enum class Cheat : int
                     //     gun shots become gun criticals
     AutoChain,      // F6, LT + B: issen chains continue without pressing attack
     MoveSpeed,      // F7, LT + X: cycles off / x2 / x3 / x4 horizontal player movement
+    AutoGuard,      // F8, LT + A: hits are deflected (just guard) without pressing guard
     Count
 };
 

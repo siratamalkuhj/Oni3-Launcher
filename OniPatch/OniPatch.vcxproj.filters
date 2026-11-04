@@ -34,6 +34,9 @@
     <ClCompile Include="Cheats.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="CrashLog.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
     <ClCompile Include="Overlay.cpp">
       <Filter>Fichiers sources\DirectX</Filter>
     </ClCompile>
@@ -73,6 +76,9 @@
       <Filter>Fichiers d%27en-tête\DirectX</Filter>
     </ClInclude>
     <ClInclude Include="Cheats.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="CrashLog.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
     <ClInclude Include="Overlay.h">
